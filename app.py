@@ -7,8 +7,8 @@ app = Flask(__name__)
 app.secret_key = "supersecret"  # any random string
 
 # ====== PUT YOUR SPOTIFY CREDENTIALS HERE ======
-CLIENT_ID = "4163144a8b7344d6a57d0a5d478d9353"
-CLIENT_SECRET = "53805cb7984c4a3d8bfdae621ddd05be"
+CLIENT_ID = ""
+CLIENT_SECRET = ""
 # ==============================================
 REDIRECT_URI = "http://127.0.0.1:5000/callback"
 
@@ -99,3 +99,4 @@ def search():
 
 if __name__ == "__main__":
     app.run(debug=True)
+
