@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Spotify Mini Clone</title>
+  <style>
+    body {
+      background: #121212;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      background: #181818;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.6);
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    #userBox {
+      background: #282828;
+      padding: 10px 15px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      display: none;
+    }
+    #userBox p {
+      margin: 0;
+    }
+    #loginSection {
+      text-align: center;
+      margin-top: 40px;
+    }
+    #loginBtn {
+      padding: 10px 20px;
+      font-size: 16px;
+      border-radius: 20px;
+      border: none;
+      background: #1DB954;
+      color: #fff;
+      cursor: pointer;
+    }
+    #searchSection {
+      display: none;
+      margin-top: 10px;
+    }
+    #searchForm {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    #queryInput {
+      flex: 1;
+      padding: 8px 10px;
+      border-radius: 20px;
+      border: 1px solid #333;
+      background: #121212;
+      color: #fff;
+    }
+    #searchBtn {
+      padding: 8px 20px;
+      border-radius: 20px;
+      border: none;
+      background: #1DB954;
+      color: #fff;
+      cursor: pointer;
+    }
+    #status {
+      font-style: italic;
+      margin-bottom: 10px;
+    }
+    #results {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 15px;
+    }
+    .card {
+      background: #282828;
+      border-radius: 10px;
+      padding: 10px;
+      text-align: center;
+    }
+    .albumArt {
+      width: 100%;
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+    .trackName {
+      font-size: 16px;
+      margin: 5px 0;
+    }
+    .trackArtist {
+      font-size: 14px;
+      color: #b3b3b3;
+      margin: 0 0 8px 0;
+    }
+    .audioPlayer {
+      width: 100%;
+    }
+    .noPreview {
+      font-size: 12px;
+      color: #aaa;
+    }
+    .openSpotify {
+      display: block;
+      margin-top: 6px;
+      font-size: 13px;
+      color: #1DB954;
+      text-decoration: none;
+    }
+    .openSpotify:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Spotify Mini Clone</h1>
+
+    <!-- Login section -->
+    <div id="loginSection">
+      <p>You are not logged in.</p>
+      <button id="loginBtn">Login with Spotify</button>
+    </div>
+
+    <!-- User info -->
+    <div id="userBox">
+      <p>Logged in as <strong id="userName"></strong></p>
+    </div>
+
+    <!-- Search UI -->
+    <div id="searchSection">
+      <form id="searchForm">
+        <input
+          type="text"
+          id="queryInput"
+          placeholder="Search for songs, artists, albums..."
+        />
+        <button id="searchBtn" type="submit">Search</button>
+      </form>
+
+      <p id="status"></p>
+      <div id="results"></div>
+    </div>
+  </div>
+
+  <script>
+    const loginSection = document.getElementById("loginSection");
+    const loginBtn = document.getElementById("loginBtn");
+    const userBox = document.getElementById("userBox");
+    const userNameSpan = document.getElementById("userName");
+    const searchSection = document.getElementById("searchSection");
+    const searchForm = document.getElementById("searchForm");
+    const queryInput = document.getElementById("queryInput");
+    const statusP = document.getElementById("status");
+    const resultsDiv = document.getElementById("results");
+
+    // Check login status on page load
+    window.addEventListener("load", () => {
+      checkLogin();
+    });
+
+    async function checkLogin() {
+      try {
+        const res = await fetch("/me");
+        if (res.status === 401) {
+          showLoggedOut();
+          return;
+        }
+        const data = await res.json();
+        if (!data.error) {
+          showLoggedIn(data);
+        } else {
+          showLoggedOut();
+        }
+      } catch (err) {
+        console.error("Error checking login:", err);
+        showLoggedOut();
+      }
+    }
+
+    function showLoggedOut() {
+      loginSection.style.display = "block";
+      userBox.style.display = "none";
+      searchSection.style.display = "none";
+      statusP.textContent = "";
+      resultsDiv.innerHTML = "";
+    }
+
+    function showLoggedIn(user) {
+      loginSection.style.display = "none";
+      userBox.style.display = "block";
+      searchSection.style.display = "block";
+      userNameSpan.textContent =
+        user.display_name || user.email || "Spotify user";
+      statusP.textContent = "You can now search for songs.";
+
+      // Load some suggestions
+      loadSuggestions();
+    }
+
+    loginBtn.addEventListener("click", () => {
+      window.location.href = "http://127.0.0.1:5000/login";
+    });
+
+    searchForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const query = queryInput.value.trim();
+      if (!query) return;
+      await performSearch(query, `Results for "${query}"`);
+    });
+
+    async function loadSuggestions() {
+      const defaultQuery = "top hits global";
+      queryInput.value = defaultQuery;
+      await performSearch(defaultQuery, `Results for "${defaultQuery}"`);
+    }
+
+    // ✅ Show ALL tracks; add audio only if preview exists
+    async function performSearch(query, label) {
+      statusP.textContent = "Loading...";
+      resultsDiv.innerHTML = "";
+
+      try {
+        const res = await fetch(`/search?q=${encodeURIComponent(query)}`);
+        const data = await res.json();
+
+        if (data.error === "not_logged_in") {
+          statusP.textContent = "You are not logged in. Please login again.";
+          showLoggedOut();
+          return;
+        }
+
+        let tracks = data.tracks ? data.tracks.items : [];
+        statusP.textContent = `${label} (found ${tracks.length} tracks)`;
+
+        if (tracks.length === 0) {
+          resultsDiv.innerHTML = "<p>No results for this query.</p>";
+          return;
+        }
+
+        tracks.forEach((track) => {
+          const card = document.createElement("div");
+          card.className = "card";
+
+          const img =
+            track.album && track.album.images && track.album.images.length > 0
+              ? track.album.images[0].url
+              : null;
+          const preview = track.preview_url;
+
+          if (img) {
+            const imgEl = document.createElement("img");
+            imgEl.src = img;
+            imgEl.alt = track.name;
+            imgEl.className = "albumArt";
+            card.appendChild(imgEl);
+          }
+
+          const titleEl = document.createElement("h3");
+          titleEl.className = "trackName";
+          titleEl.textContent = track.name;
+          card.appendChild(titleEl);
+
+          const artistEl = document.createElement("p");
+          artistEl.className = "trackArtist";
+          artistEl.textContent = track.artists.map((a) => a.name).join(", ");
+          card.appendChild(artistEl);
+
+          if (preview) {
+            const audioEl = document.createElement("audio");
+            audioEl.className = "audioPlayer";
+            audioEl.controls = true;
+            audioEl.src = preview;
+            card.appendChild(audioEl);
+          } else {
+            const noPrev = document.createElement("p");
+            noPrev.className = "noPreview";
+            noPrev.textContent = "No 30s preview available";
+            card.appendChild(noPrev);
+          }
+
+          // Link to full song in Spotify
+          if (track.external_urls && track.external_urls.spotify) {
+            const link = document.createElement("a");
+            link.href = track.external_urls.spotify;
+            link.target = "_blank";
+            link.className = "openSpotify";
+            link.textContent = "Open full song in Spotify";
+            card.appendChild(link);
+          }
+
+          resultsDiv.appendChild(card);
+        });
+      } catch (err) {
+        console.error("Search error:", err);
+        statusP.textContent = "Error during search.";
+      }
+    }
+  </script>
+</body>
+</html>
